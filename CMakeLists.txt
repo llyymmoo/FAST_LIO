@@ -39,6 +39,14 @@ find_package(OpenMP QUIET)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}   ${OpenMP_C_FLAGS}")
 
+find_package(OpenCV REQUIRED)
+
+FIND_PACKAGE(Boost REQUIRED COMPONENTS filesystem iostreams program_options system serialization)
+if(Boost_FOUND)
+	INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS})
+	LINK_DIRECTORIES(${Boost_LIBRARY_DIRS})
+endif()
+
 find_package(PythonLibs REQUIRED)
 find_path(MATPLOTLIB_CPP_INCLUDE_DIRS "matplotlibcpp.h")
 
@@ -65,8 +73,11 @@ include_directories(
 	${catkin_INCLUDE_DIRS} 
   ${EIGEN3_INCLUDE_DIR}
   ${PCL_INCLUDE_DIRS}
+  ${OpenCV_INCLUDE_DIRS}
   ${PYTHON_INCLUDE_DIRS}
-  include)
+  include
+  rgb_map
+  tools)
 
 add_message_files(
   FILES
@@ -84,6 +95,9 @@ catkin_package(
   INCLUDE_DIRS
 )
 
-add_executable(fastlio_mapping src/laserMapping.cpp include/ikd-Tree/ikd_Tree.cpp src/preprocess.cpp)
-target_link_libraries(fastlio_mapping ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${PYTHON_LIBRARIES})
+add_executable(fastlio_mapping src/laserMapping.cpp include/ikd-Tree/ikd_Tree.cpp src/preprocess.cpp
+                               rgb_map/image_frame.cpp
+                               rgb_map/offline_map_recorder.cpp
+                               rgb_map/pointcloud_rgbd.cpp)
+target_link_libraries(fastlio_mapping ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${PYTHON_LIBRARIES} ${OpenCV_LIBRARIES} ${Boost_LIBRARIES} ${Boost_FILESYSTEM_LIBRARY} ${Boost_SERIALIZATION_LIBRARY})
 target_include_directories(fastlio_mapping PRIVATE ${PYTHON_INCLUDE_DIRS})

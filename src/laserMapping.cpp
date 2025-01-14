@@ -60,10 +60,24 @@
 #include "preprocess.h"
 #include <ikd-Tree/ikd_Tree.h>
 
+#include "image_frame.hpp"
+#include "pointcloud_rgbd.hpp"
+
+#include "offline_map_recorder.hpp"
+
 #define INIT_TIME           (0.1)
 #define LASER_POINT_COV     (0.001)
 #define MAXN                (720000)
 #define PUBFRAME_PERIOD     (20)
+
+/*** Global Variables for MVS ***/
+Global_map g_map_rgb_pts;
+Offline_map_recorder g_mvs_recorder;
+
+Eigen::Matrix3d g_cam_K;
+int g_frame_idx;
+
+pcl::PointCloud<pcl::PointXYZI>::Ptr laserCloudWorld;
 
 /*** Time Log Variables ***/
 double kdtree_incremental_time = 0.0, kdtree_search_time = 0.0, kdtree_delete_time = 0.0;
@@ -140,6 +154,24 @@ geometry_msgs::PoseStamped msg_body_pose;
 shared_ptr<Preprocess> p_pre(new Preprocess());
 shared_ptr<ImuProcess> p_imu(new ImuProcess());
 
+/*** Functions for MVS ***/
+void set_image_frame(std::shared_ptr< Image_frame > &image_pose)
+{
+    image_pose->set_frame_idx(g_frame_idx);
+
+    Eigen::Matrix3d Rwi = state_point.rot.matrix();
+    Eigen::Vector3d twi = state_point.pos;
+    Eigen::Matrix3d Ril = state_point.offset_R_L_I.matrix();
+    Eigen::Vector3d til = state_point.offset_T_L_I;
+    Eigen::Matrix3d Rwl = Rwi * Ril;
+    Eigen::Vector3d twl = Rwi * til + twi;
+    image_pose->set_pose( eigen_q( Rwl ), twl );
+    
+    image_pose->set_intrinsic(g_cam_K);
+    
+    return;
+}
+
 void SigHandle(int sig)
 {
     flg_exit = true;
@@ -195,6 +227,22 @@ void pointBodyToWorld(const Matrix<T, 3, 1> &pi, Matrix<T, 3, 1> &po)
     po[0] = p_global(0);
     po[1] = p_global(1);
     po[2] = p_global(2);
+}
+
+void RGBpointBodyToWorld( PointType const *const pi, pcl::PointXYZI *const po )
+{
+    Eigen::Vector3d p_body( pi->x, pi->y, pi->z );
+    Eigen::Vector3d p_global( state_point.rot * (state_point.offset_R_L_I*p_body + state_point.offset_T_L_I) + state_point.pos );
+
+    po->x = p_global( 0 );
+    po->y = p_global( 1 );
+    po->z = p_global( 2 );
+    po->intensity = pi->intensity;
+
+    float intensity = pi->intensity;
+    intensity = intensity - std::floor( intensity );
+
+    int reflection_map = intensity * 10000;
 }
 
 void RGBpointBodyToWorld(PointType const * const pi, PointType * const po)
@@ -798,6 +846,19 @@ int main(int argc, char** argv)
     path.header.stamp    = ros::Time::now();
     path.header.frame_id ="camera_init";
 
+    /*** MVS Init ***/
+    g_cam_K << 1, 0, 1,
+               0, 1, 1,
+               0, 0, 1;
+    g_mvs_recorder.init( g_cam_K, 1, &g_map_rgb_pts );
+    g_mvs_recorder.set_working_dir( "/home/lym/res/mvs" );
+
+    g_map_rgb_pts.m_minimum_pts_size = 0.05; // m
+
+    g_frame_idx = 0;
+
+    laserCloudWorld = boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
+
     /*** variables definition ***/
     int effect_feat_num = 0, frame_num = 0;
     double deltaT, deltaR, aver_time_consu = 0, aver_time_icp = 0, aver_time_match = 0, aver_time_incre = 0, aver_time_solve = 0, aver_time_const_H_time = 0;
@@ -968,6 +1029,25 @@ int main(int argc, char** argv)
 
             double t_update_end = omp_get_wtime();
 
+            /******* MVS Update*******/
+            PointCloudXYZI::Ptr laserCloudLocal(feats_down_body); // dense_pub_en ? feats_undistort : feats_down_body
+            int size = laserCloudLocal->points.size();
+            pcl::PointXYZI temp_point;
+            laserCloudWorld->clear();
+            for (int i = 0; i < size; i++) {
+                RGBpointBodyToWorld(&laserCloudLocal->points[i], &temp_point);
+                laserCloudWorld->push_back( temp_point );
+            }
+            std::vector< std::shared_ptr< RGB_pts > > pts_curr_scan;
+            pts_curr_scan.reserve( 1e6 );
+            g_map_rgb_pts.append_points_to_global_map(*laserCloudWorld, 0, &pts_curr_scan, 1);
+            
+            std::shared_ptr< Image_frame > img_pose = std::make_shared<Image_frame>();
+            set_image_frame(img_pose);
+
+            g_mvs_recorder.insert_image_and_pts( img_pose, pts_curr_scan );
+            g_frame_idx++;
+            
             /******* Publish odometry *******/
             publish_odometry(pubOdomAftMapped);
 
@@ -1017,6 +1097,9 @@ int main(int argc, char** argv)
         status = ros::ok();
         rate.sleep();
     }
+
+    /********** MVS Save ***********/
+    g_mvs_recorder.export_to_mvs( g_map_rgb_pts );
 
     /**************** save map ****************/
     /* 1. make sure you have enough memories
