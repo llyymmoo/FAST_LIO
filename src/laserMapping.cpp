@@ -70,6 +70,8 @@
 #define MAXN                (720000)
 #define PUBFRAME_PERIOD     (20)
 
+#define PCD_SAVE_PATH "/home/lym/res/mvs/calib.pcd"
+
 /*** Global Variables for MVS ***/
 Global_map g_map_rgb_pts;
 Offline_map_recorder g_mvs_recorder;
@@ -549,7 +551,7 @@ void publish_frame_world(const ros::Publisher & pubLaserCloudFull)
     /**************** save map ****************/
     /* 1. make sure you have enough memories
     /* 2. noted that pcd save will influence the real-time performences **/
-    if (pcd_save_en)
+    if (1)
     {
         int size = feats_undistort->points.size();
         PointCloudXYZI::Ptr laserCloudWorld( \
@@ -562,18 +564,18 @@ void publish_frame_world(const ros::Publisher & pubLaserCloudFull)
         }
         *pcl_wait_save += *laserCloudWorld;
 
-        static int scan_wait_num = 0;
-        scan_wait_num ++;
-        if (pcl_wait_save->size() > 0 && pcd_save_interval > 0  && scan_wait_num >= pcd_save_interval)
-        {
-            pcd_index ++;
-            string all_points_dir(string(string(ROOT_DIR) + "PCD/scans_") + to_string(pcd_index) + string(".pcd"));
-            pcl::PCDWriter pcd_writer;
-            cout << "current scan saved to /PCD/" << all_points_dir << endl;
-            pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
-            pcl_wait_save->clear();
-            scan_wait_num = 0;
-        }
+        // static int scan_wait_num = 0;
+        // scan_wait_num ++;
+        // if (pcl_wait_save->size() > 0 && pcd_save_interval > 0  && scan_wait_num >= pcd_save_interval)
+        // {
+        //     pcd_index ++;
+        //     string all_points_dir(string(string(ROOT_DIR) + "PCD/scans_") + to_string(pcd_index) + string(".pcd"));
+        //     pcl::PCDWriter pcd_writer;
+        //     cout << "current scan saved to /PCD/" << all_points_dir << endl;
+        //     pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
+        //     pcl_wait_save->clear();
+        //     scan_wait_num = 0;
+        // }
     }
 }
 
@@ -846,18 +848,18 @@ int main(int argc, char** argv)
     path.header.stamp    = ros::Time::now();
     path.header.frame_id ="camera_init";
 
-    /*** MVS Init ***/
-    g_cam_K << 1, 0, 1,
-               0, 1, 1,
-               0, 0, 1;
-    g_mvs_recorder.init( g_cam_K, 1, &g_map_rgb_pts );
-    g_mvs_recorder.set_working_dir( "/home/lym/res/mvs" );
+    // /*** MVS Init ***/
+    // g_cam_K << 1, 0, 1,
+    //            0, 1, 1,
+    //            0, 0, 1;
+    // g_mvs_recorder.init( g_cam_K, 1, &g_map_rgb_pts );
+    // g_mvs_recorder.set_working_dir( "/home/lym/res/mvs" );
 
-    g_map_rgb_pts.m_minimum_pts_size = 0.05; // m
+    // g_map_rgb_pts.m_minimum_pts_size = 0.05; // m
 
-    g_frame_idx = 0;
+    // g_frame_idx = 0;
 
-    laserCloudWorld = boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
+    // laserCloudWorld = boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
 
     /*** variables definition ***/
     int effect_feat_num = 0, frame_num = 0;
@@ -1029,24 +1031,24 @@ int main(int argc, char** argv)
 
             double t_update_end = omp_get_wtime();
 
-            /******* MVS Update*******/
-            PointCloudXYZI::Ptr laserCloudLocal(feats_down_body); // dense_pub_en ? feats_undistort : feats_down_body
-            int size = laserCloudLocal->points.size();
-            pcl::PointXYZI temp_point;
-            laserCloudWorld->clear();
-            for (int i = 0; i < size; i++) {
-                RGBpointBodyToWorld(&laserCloudLocal->points[i], &temp_point);
-                laserCloudWorld->push_back( temp_point );
-            }
-            std::vector< std::shared_ptr< RGB_pts > > pts_curr_scan;
-            pts_curr_scan.reserve( 1e6 );
-            g_map_rgb_pts.append_points_to_global_map(*laserCloudWorld, 0, &pts_curr_scan, 1);
+            // /******* MVS Update*******/
+            // PointCloudXYZI::Ptr laserCloudLocal(feats_down_body); // dense_pub_en ? feats_undistort : feats_down_body
+            // int size = laserCloudLocal->points.size();
+            // pcl::PointXYZI temp_point;
+            // laserCloudWorld->clear();
+            // for (int i = 0; i < size; i++) {
+            //     RGBpointBodyToWorld(&laserCloudLocal->points[i], &temp_point);
+            //     laserCloudWorld->push_back( temp_point );
+            // }
+            // std::vector< std::shared_ptr< RGB_pts > > pts_curr_scan;
+            // pts_curr_scan.reserve( 1e6 );
+            // g_map_rgb_pts.append_points_to_global_map(*laserCloudWorld, 0, &pts_curr_scan, 1);
             
-            std::shared_ptr< Image_frame > img_pose = std::make_shared<Image_frame>();
-            set_image_frame(img_pose);
+            // std::shared_ptr< Image_frame > img_pose = std::make_shared<Image_frame>();
+            // set_image_frame(img_pose);
 
-            g_mvs_recorder.insert_image_and_pts( img_pose, pts_curr_scan );
-            g_frame_idx++;
+            // g_mvs_recorder.insert_image_and_pts( img_pose, pts_curr_scan );
+            // g_frame_idx++;
             
             /******* Publish odometry *******/
             publish_odometry(pubOdomAftMapped);
@@ -1098,19 +1100,17 @@ int main(int argc, char** argv)
         rate.sleep();
     }
 
-    /********** MVS Save ***********/
-    g_mvs_recorder.export_to_mvs( g_map_rgb_pts );
+    // /********** MVS Save ***********/
+    // g_mvs_recorder.export_to_mvs( g_map_rgb_pts );
 
     /**************** save map ****************/
     /* 1. make sure you have enough memories
     /* 2. pcd save will largely influence the real-time performences **/
-    if (pcl_wait_save->size() > 0 && pcd_save_en)
+    if (1)
     {
-        string file_name = string("scans.pcd");
-        string all_points_dir(string(string(ROOT_DIR) + "PCD/") + file_name);
         pcl::PCDWriter pcd_writer;
-        cout << "current scan saved to /PCD/" << file_name<<endl;
-        pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
+        cout << "all points saved to /PCD/" << PCD_SAVE_PATH <<endl;
+        pcd_writer.writeBinary(PCD_SAVE_PATH, *pcl_wait_save);
     }
 
     fout_out.close();
