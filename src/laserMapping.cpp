@@ -70,6 +70,9 @@
 #define MAXN                (720000)
 #define PUBFRAME_PERIOD     (20)
 
+#define SAVE_XYZ_POINT_CLOUD
+#define SAVE_XYZ_FILE_PATH "/home/lym/res/mvs/points_xyz.txt"
+
 /*** Global Variables for MVS ***/
 Global_map g_map_rgb_pts;
 Offline_map_recorder g_mvs_recorder;
@@ -562,18 +565,18 @@ void publish_frame_world(const ros::Publisher & pubLaserCloudFull)
         }
         *pcl_wait_save += *laserCloudWorld;
 
-        static int scan_wait_num = 0;
-        scan_wait_num ++;
-        if (pcl_wait_save->size() > 0 && pcd_save_interval > 0  && scan_wait_num >= pcd_save_interval)
-        {
-            pcd_index ++;
-            string all_points_dir(string(string(ROOT_DIR) + "PCD/scans_") + to_string(pcd_index) + string(".pcd"));
-            pcl::PCDWriter pcd_writer;
-            cout << "current scan saved to /PCD/" << all_points_dir << endl;
-            pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
-            pcl_wait_save->clear();
-            scan_wait_num = 0;
-        }
+        // static int scan_wait_num = 0;
+        // scan_wait_num ++;
+        // if (pcl_wait_save->size() > 0 && pcd_save_interval > 0  && scan_wait_num >= pcd_save_interval)
+        // {
+        //     pcd_index ++;
+        //     string all_points_dir(string(string(ROOT_DIR) + "PCD/scans_") + to_string(pcd_index) + string(".pcd"));
+        //     pcl::PCDWriter pcd_writer;
+        //     cout << "current scan saved to /PCD/" << all_points_dir << endl;
+        //     pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
+        //     pcl_wait_save->clear();
+        //     scan_wait_num = 0;
+        // }
     }
 }
 
@@ -1030,7 +1033,7 @@ int main(int argc, char** argv)
             double t_update_end = omp_get_wtime();
 
             /******* MVS Update*******/
-            PointCloudXYZI::Ptr laserCloudLocal(feats_down_body); // dense_pub_en ? feats_undistort : feats_down_body
+            PointCloudXYZI::Ptr laserCloudLocal(feats_undistort); // dense_pub_en ? feats_undistort : feats_down_body
             int size = laserCloudLocal->points.size();
             pcl::PointXYZI temp_point;
             laserCloudWorld->clear();
@@ -1104,14 +1107,27 @@ int main(int argc, char** argv)
     /**************** save map ****************/
     /* 1. make sure you have enough memories
     /* 2. pcd save will largely influence the real-time performences **/
-    if (pcl_wait_save->size() > 0 && pcd_save_en)
+#ifdef SAVE_XYZ_POINT_CLOUD
     {
-        string file_name = string("scans.pcd");
-        string all_points_dir(string(string(ROOT_DIR) + "PCD/") + file_name);
-        pcl::PCDWriter pcd_writer;
-        cout << "current scan saved to /PCD/" << file_name<<endl;
-        pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
+        std::ofstream f;
+        f.open(SAVE_XYZ_FILE_PATH, std::ofstream::out);
+
+        long long size = pcl_wait_save->points.size();
+        for (long long i = 0; i < size; ++i) {
+            f << pcl_wait_save->points[i].x << " "
+              << pcl_wait_save->points[i].y << " "
+              << pcl_wait_save->points[i].z << std::endl;
+        }
+
+        f.close();
+        
+        // string file_name = string("scans.pcd");
+        // string all_points_dir(string(string(ROOT_DIR) + "PCD/") + file_name);
+        // pcl::PCDWriter pcd_writer;
+        // cout << "current scan saved to /PCD/" << file_name<<endl;
+        // pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
     }
+#endif
 
     fout_out.close();
     fout_pre.close();
