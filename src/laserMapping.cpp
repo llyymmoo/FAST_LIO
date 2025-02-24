@@ -71,7 +71,9 @@
 #define PUBFRAME_PERIOD     (20)
 
 #define SAVE_XYZ_POINT_CLOUD
-#define SAVE_XYZ_FILE_PATH "/home/lym/res/mvs/points_xyz.txt"
+#define SAVE_XYZ_FILE_PATH "/home/lym/res/6F_recon/metadata/points_xyz.txt"
+#define SAVE_TRAJ
+#define SAVE_TRAJ_PATH "/home/lym/res/6F_recon/metadata/lio_traj.txt"
 
 /*** Global Variables for MVS ***/
 Global_map g_map_rgb_pts;
@@ -634,7 +636,7 @@ void set_posestamp(T & out)
     out.pose.orientation.y = geoQuat.y;
     out.pose.orientation.z = geoQuat.z;
     out.pose.orientation.w = geoQuat.w;
-    
+
 }
 
 void publish_odometry(const ros::Publisher & pubOdomAftMapped)
@@ -644,6 +646,23 @@ void publish_odometry(const ros::Publisher & pubOdomAftMapped)
     odomAftMapped.header.stamp = ros::Time().fromSec(lidar_end_time);// ros::Time().fromSec(lidar_end_time);
     set_posestamp(odomAftMapped.pose);
     pubOdomAftMapped.publish(odomAftMapped);
+
+#ifdef SAVE_TRAJ
+    std::ofstream file;
+    file.open(SAVE_TRAJ_PATH, std::ios::app);
+
+    file << odomAftMapped.header.stamp.toNSec() << " "
+         << odomAftMapped.pose.pose.orientation.x << " "
+         << odomAftMapped.pose.pose.orientation.y << " "
+         << odomAftMapped.pose.pose.orientation.z << " "
+         << odomAftMapped.pose.pose.orientation.w << " "
+         << odomAftMapped.pose.pose.position.x << " "
+         << odomAftMapped.pose.pose.position.y << " "
+         << odomAftMapped.pose.pose.position.z << std::endl;
+    
+    file.close();
+#endif
+
     auto P = kf.get_P();
     for (int i = 0; i < 6; i ++)
     {
