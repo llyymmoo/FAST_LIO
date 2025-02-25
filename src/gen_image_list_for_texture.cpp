@@ -66,14 +66,23 @@ void generate_image_pose_list(std::vector<Pose>& ref_poses, std::vector<std::str
         double a1 = (t - t1) / (t2 - t1);
         double a2 = 1 - a1;
 
-        Eigen::Vector4d q1, q2;
-        q1(0) = ref_poses[idx-1].qwl.x(); q1(1) = ref_poses[idx-1].qwl.y(); q1(2) = ref_poses[idx-1].qwl.z(); q1(3) = ref_poses[idx-1].qwl.w();
-        q2(0) = ref_poses[idx].qwl.x(); q2(1) = ref_poses[idx].qwl.y(); q2(2) = ref_poses[idx].qwl.z(); q2(3) = ref_poses[idx].qwl.w();
+        Eigen::Quaterniond qwl;
+        Eigen::Vector3d twl;
 
-        Eigen::Vector4d q = a1*q1 + a2*q2;
-        q = q / q.norm();
-        Eigen::Vector3d twl = a1*ref_poses[idx-1].twl + a2*ref_poses[idx].twl;
-        Eigen::Quaterniond qwl(q);
+        twl = a1*ref_poses[idx-1].twl + a2*ref_poses[idx].twl;
+        
+        if (0) {  // linear interp
+            Eigen::Vector4d q1, q2;
+            q1(0) = ref_poses[idx-1].qwl.x(); q1(1) = ref_poses[idx-1].qwl.y(); q1(2) = ref_poses[idx-1].qwl.z(); q1(3) = ref_poses[idx-1].qwl.w();
+            q2(0) = ref_poses[idx].qwl.x(); q2(1) = ref_poses[idx].qwl.y(); q2(2) = ref_poses[idx].qwl.z(); q2(3) = ref_poses[idx].qwl.w();
+
+            Eigen::Vector4d q = a1*q1 + a2*q2;
+            q = q / q.norm();
+            qwl = Eigen::Quaterniond(q);
+        } else { // spherical interp
+            qwl = ref_poses[idx-1].qwl.slerp(a2, ref_poses[idx].qwl);
+        }
+        
 
         Eigen::Matrix3d Rwl = qwl.toRotationMatrix();
         Eigen::Matrix3d Rwc = Rwl * Rlc;
