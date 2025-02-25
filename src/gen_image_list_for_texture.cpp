@@ -17,7 +17,7 @@
 
 #include <string>
 
-#define TIME_SCALE 1000000000
+#define TIME_SCALE 1000000000.0
 
 struct Pose {
     std::string timestamp;
@@ -25,17 +25,28 @@ struct Pose {
     Eigen::Vector3d twl;
 };
 
-Eigen::Matrix3d Rlc;
-Eigen::Vector3d tlc;
+Eigen::Matrix3d Rlc_front, Rlc_back;
+Eigen::Vector3d tlc_front, tlc_back;
+double time_offset;
 
-void generate_image_pose_list(std::vector<Pose>& ref_poses, std::vector<std::string> image_timestamps, std::string list_save_path)
+void generate_image_pose_list(std::vector<Pose>& ref_poses, std::vector<std::string> image_timestamps, std::string list_save_path, int type)
 {
     std::ofstream file;
     file.open(list_save_path, std::ios::app);
 
+    Eigen::Matrix3d Rlc;
+    Eigen::Vector3d tlc;
+    if (type == 0) { // front
+        Rlc = Rlc_front;
+        tlc = tlc_front;
+    } else if (type == 1) { // back
+        Rlc = Rlc_back;
+        tlc = tlc_back;
+    }
+
     int idx = 0;
     for (auto& timestamp : image_timestamps) {
-        while (idx < ref_poses.size() && ref_poses[idx].timestamp < timestamp)
+        while (idx < ref_poses.size() && stod(ref_poses[idx].timestamp) / TIME_SCALE < stod(timestamp) / TIME_SCALE + time_offset)
             ++idx;
         
         if (idx == 0) {
@@ -43,14 +54,14 @@ void generate_image_pose_list(std::vector<Pose>& ref_poses, std::vector<std::str
             continue;
         }
 
-        if (idx >= ref_pose.size()) {
+        if (idx >= ref_poses.size()) {
             std::cout << "image after timestamp " << timestamp << " are ignored" << std::endl;
             break;
         }
 
         double t1 = stod(ref_poses[idx-1].timestamp) / TIME_SCALE;
         double t2 = stod(ref_poses[idx].timestamp) / TIME_SCALE;
-        double t = stod(timestamp) / TIME_SCALE;
+        double t = stod(timestamp) / TIME_SCALE + time_offset;
 
         double a1 = (t - t1) / (t2 - t1);
         double a2 = 1 - a1;
@@ -69,9 +80,9 @@ void generate_image_pose_list(std::vector<Pose>& ref_poses, std::vector<std::str
         Eigen::Vector3d twc = Rwl * tlc + twl;
         Eigen::Quaterniond qwc(Rwc);
 
-        file << timestamp
-             << qwc.x() << qwc.y() << qwc.z() << qwc.w()
-             << twc.x() << twc.y() << twc.z() << std::endl;
+        file << timestamp << " "
+             << qwc.x() << " " << qwc.y() << " " << qwc.z() << " " << qwc.w() << " "
+             << twc.x() << " " << twc.y() << " " << twc.z() << std::endl;
     }
 
     file.close();
@@ -83,23 +94,36 @@ void generate_image_pose_list(std::vector<Pose>& ref_poses, std::vector<std::str
 int main(int argc, char **argv) {
 
     // 0. parameters and pathes define
-    std::string ros_bag_file_path = "";
-    std::string front_image_topic = "";
-    std::string back_image_topic = "";
-    std::string front_image_save_folder = "";
-    std::string back_image_save_folder = "";
-    std::string fast_lio_pose_path = "";
-    std::string front_image_pose_save_path = "";
-    std::string back_image_pose_save_path = "";
+    std::string ros_bag_file_path = "/media/lym/1A10B49E0A4AC5C7/2025-01-17-00-17-00.bag";
+    std::string front_image_topic = "/front_camera_image/compressed";
+    std::string back_image_topic = "/back_camera_image/compressed";
+    std::string front_image_save_folder = "/home/lym/res/6F_recon/front";
+    std::string back_image_save_folder = "/home/lym/res/6F_recon/back";
+    std::string fast_lio_pose_path = "/home/lym/res/6F_recon/metadata/lio_traj.txt";
+    std::string front_image_pose_save_path = "/home/lym/res/6F_recon/metadata/front_pose.txt";
+    std::string back_image_pose_save_path = "/home/lym/res/6F_recon/metadata/back_pose.txt";
 
-    double K[4] = {1, 1, 1, 1};
-    double D[5] = {1, 1, 1, 1, 1};
-    double time_offset = 0;
-    int height = 0;
-    int width = 0;
+    double K[4] = {305.85, 304.87, 572.00, 578.97};
+    double D[5] = {0.082996, -0.027906, 0.007620, -0.001084, 0.0};
+    time_offset = -0.6273233;  // lio timestamp = image timestamp + time_offset (s)
+    int height = 1152;
+    int width = 1152;
 
-    Rlc;
-    tlc;
+    Eigen::Matrix3d Rcl_front, Rcl_back;
+    Eigen::Vector3d tcl_front, tcl_back;
+    Rcl_front << 0.0244905, -0.351308, -0.93594,
+                 0.00815397, -0.936119, 0.351588,
+                 -0.999667, -0.0162422, -0.0200615;
+    tcl_front << 0.157101, 0.150698, -0.155186;
+    Rcl_back << 0.0753357, 0.362986, 0.928744,
+                0.0575196, -0.931422, 0.359367,
+                0.995498, 0.0263478, -0.0910481;
+    tcl_back << -0.20808, -0.0547745, -0.0558749;
+    
+    Rlc_front = Rcl_front.transpose();
+    tlc_front = -Rlc_front * tcl_front;
+    Rlc_back = Rcl_back.transpose();
+    tlc_back = -Rlc_back * tcl_back;
     
     // 1. extract front and back images and do the undistortion
     rosbag::Bag bag;
@@ -111,8 +135,8 @@ int main(int argc, char **argv) {
 
     cv::Mat camera_matrix = cv::Mat::eye(3, 3, CV_64F);
     camera_matrix.at<double>(0, 0) = K[0];
-    camera_matrix.at<double>(0, 2) = K[1];
-    camera_matrix.at<double>(1, 1) = K[2];
+    camera_matrix.at<double>(0, 2) = K[2];
+    camera_matrix.at<double>(1, 1) = K[1];
     camera_matrix.at<double>(1, 2) = K[3];
     cv::Mat distortion_coef = cv::Mat::zeros(4, 1, CV_64F);
     distortion_coef.at<double>(0, 0) = D[0];
@@ -129,8 +153,8 @@ int main(int argc, char **argv) {
         std::string topic = m.getTopic();
 
         sensor_msgs::CompressedImage::ConstPtr img = m.instantiate<sensor_msgs::CompressedImage>();
-        cv::Mat image = cv::imdecode(cv::Mat(img->data), cv::IMREAD_COLOR);
-        cv::remap(image, image, map1, map2, cv::INTER_LINEAR);
+        // cv::Mat image = cv::imdecode(cv::Mat(img->data), cv::IMREAD_COLOR);
+        // cv::remap(image, image, map1, map2, cv::INTER_LINEAR);
 
         std::string save_path;
         if (topic == front_image_topic) {
@@ -146,17 +170,17 @@ int main(int argc, char **argv) {
             exit(0);
         }
 
-        cv::imwrite(path, image);
+        // cv::imwrite(save_path, image);
     }
 
     bag.close();
 
 
     // 2. read the trajectory file of fast-lio and interpolate the pose of images
-    std::sort(front_image_timestamps.begin(), front_image_timestamps.end(), [](string& a, string& b) {
+    std::sort(front_image_timestamps.begin(), front_image_timestamps.end(), [](std::string& a, std::string& b) {
         return a < b;
     });
-    std::sort(back_image_timestamps.begin(), back_image_timestamps.end(), [](string& a, string& b) {
+    std::sort(back_image_timestamps.begin(), back_image_timestamps.end(), [](std::string& a, std::string& b) {
         return a < b;
     });
 
@@ -175,8 +199,8 @@ int main(int argc, char **argv) {
         lidar_poses.push_back(pose);
     }
 
-    generate_image_pose_list(lidar_poses, front_image_timestamps, front_image_pose_save_path);
-    generate_image_pose_list(lidar_poses, back_image_timestamps, back_image_pose_save_path);
+    generate_image_pose_list(lidar_poses, front_image_timestamps, front_image_pose_save_path, 0);
+    generate_image_pose_list(lidar_poses, back_image_timestamps, back_image_pose_save_path, 1);
 
     return 0;
 }

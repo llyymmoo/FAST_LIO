@@ -74,6 +74,7 @@
 #define SAVE_XYZ_FILE_PATH "/home/lym/res/6F_recon/metadata/points_xyz.txt"
 #define SAVE_TRAJ
 #define SAVE_TRAJ_PATH "/home/lym/res/6F_recon/metadata/lio_traj.txt"
+#define R3LIVE_SAVE_PATH "/home/lym/res/6F_recon/mvs"
 
 /*** Global Variables for MVS ***/
 Global_map g_map_rgb_pts;
@@ -873,7 +874,7 @@ int main(int argc, char** argv)
                0, 1, 1,
                0, 0, 1;
     g_mvs_recorder.init( g_cam_K, 1, &g_map_rgb_pts );
-    g_mvs_recorder.set_working_dir( "/home/lym/res/mvs" );
+    g_mvs_recorder.set_working_dir( R3LIVE_SAVE_PATH );
 
     g_map_rgb_pts.m_minimum_pts_size = 0.05; // m
 
