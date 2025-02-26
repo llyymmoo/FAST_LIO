@@ -90,8 +90,9 @@ void generate_image_pose_list(std::vector<Pose>& ref_poses, std::vector<std::str
         Eigen::Quaterniond qwc(Rwc);
 
         file << timestamp << " "
-             << qwc.x() << " " << qwc.y() << " " << qwc.z() << " " << qwc.w() << " "
-             << twc.x() << " " << twc.y() << " " << twc.z() << std::endl;
+             << twc.x() << " " << twc.y() << " " << twc.z() << " "
+             << qwc.x() << " " << qwc.y() << " " << qwc.z() << " " << qwc.w() << std::endl;
+             
     }
 
     file.close();
@@ -103,7 +104,7 @@ void generate_image_pose_list(std::vector<Pose>& ref_poses, std::vector<std::str
 int main(int argc, char **argv) {
 
     // 0. parameters and pathes define
-    std::string ros_bag_file_path = "/media/lym/1A10B49E0A4AC5C7/2025-01-17-00-17-00.bag";
+    std::string ros_bag_file_path = "/media/lym/1A10B49E0A4AC5C7/2025-02-25-22-45-21.bag";
     std::string front_image_topic = "/front_camera_image/compressed";
     std::string back_image_topic = "/back_camera_image/compressed";
     std::string front_image_save_folder = "/home/lym/res/6F_recon/front";
@@ -114,7 +115,7 @@ int main(int argc, char **argv) {
 
     double K[4] = {305.85, 304.87, 572.00, 578.97};
     double D[5] = {0.082996, -0.027906, 0.007620, -0.001084, 0.0};
-    time_offset = -0.6273233;  // lio timestamp = image timestamp + time_offset (s)
+    time_offset = -0.074795445; //-0.6273233;  // lio timestamp = image timestamp + time_offset (s)
     int height = 1152;
     int width = 1152;
 
@@ -202,8 +203,8 @@ int main(int argc, char **argv) {
 
         Pose pose;
         ss >> pose.timestamp
-           >> pose.qwl.x() >> pose.qwl.y() >> pose.qwl.z() >> pose.qwl.w()
-           >> pose.twl.x() >> pose.twl.y() >> pose.twl.z();
+           >> pose.twl.x() >> pose.twl.y() >> pose.twl.z()
+           >> pose.qwl.x() >> pose.qwl.y() >> pose.qwl.z() >> pose.qwl.w();
 
         lidar_poses.push_back(pose);
     }
