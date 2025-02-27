@@ -70,10 +70,11 @@
 #define MAXN                (720000)
 #define PUBFRAME_PERIOD     (20)
 
-#define SAVE_XYZ_POINT_CLOUD
+// #define SAVE_XYZ_POINT_CLOUD
 #define SAVE_XYZ_FILE_PATH "/home/lym/res/6F_recon/metadata/points_xyz.txt"
 #define SAVE_TRAJ
-#define SAVE_TRAJ_PATH "/home/lym/res/6F_recon/metadata/lio_traj.txt"
+#define SAVE_TRAJ_PATH "/home/lym/res/slam_acc/lio/line.txt"
+// #define SAVE_R3LIVE
 #define R3LIVE_SAVE_PATH "/home/lym/res/6F_recon/mvs"
 
 /*** Global Variables for MVS ***/
@@ -651,8 +652,9 @@ void publish_odometry(const ros::Publisher & pubOdomAftMapped)
 #ifdef SAVE_TRAJ
     std::ofstream file;
     file.open(SAVE_TRAJ_PATH, std::ios::app);
+    file << fixed;
 
-    file << odomAftMapped.header.stamp.toNSec() << " "
+    file << setprecision(6) << odomAftMapped.header.stamp.toSec() << " "
          << odomAftMapped.pose.pose.position.x << " "
          << odomAftMapped.pose.pose.position.y << " "
          << odomAftMapped.pose.pose.position.z << " "
@@ -1052,6 +1054,7 @@ int main(int argc, char** argv)
 
             double t_update_end = omp_get_wtime();
 
+#ifdef SAVE_R3LIVE
             /******* MVS Update*******/
             PointCloudXYZI::Ptr laserCloudLocal(feats_undistort); // dense_pub_en ? feats_undistort : feats_down_body
             int size = laserCloudLocal->points.size();
@@ -1070,6 +1073,7 @@ int main(int argc, char** argv)
 
             g_mvs_recorder.insert_image_and_pts( img_pose, pts_curr_scan );
             g_frame_idx++;
+#endif
             
             /******* Publish odometry *******/
             publish_odometry(pubOdomAftMapped);
@@ -1121,8 +1125,10 @@ int main(int argc, char** argv)
         rate.sleep();
     }
 
+#ifdef SAVE_R3LIVE
     /********** MVS Save ***********/
     g_mvs_recorder.export_to_mvs( g_map_rgb_pts );
+#endif
 
     /**************** save map ****************/
     /* 1. make sure you have enough memories
